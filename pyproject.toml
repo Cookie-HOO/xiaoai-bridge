@@ -1,0 +1,28 @@
+[project]
+name = "xiaoai-bridge"
+version = "0.1.0"
+description = "Simple XiaoAi speaker control loop"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "httpx>=0.28.1",
+    "pydantic-settings>=2.10.1",
+    "python-dotenv>=1.1.1",
+]
+
+[project.scripts]
+xiaoai-bridge = "xiaoai_bridge.app:main"
+xiaoai-check-login = "xiaoai_bridge.check_login:main"
+xiaoai-select = "xiaoai_bridge.whichxiaoai:main"
+xiaoai-test-speak = "xiaoai_bridge.test_speak:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
