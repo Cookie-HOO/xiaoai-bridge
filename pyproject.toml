@@ -1,6 +1,6 @@
 [project]
 name = "xiaoai-bridge"
-version = "0.2.0"
+version = "0.2.1"
 description = "Use XiaoAi speakers as a programmable Python voice entrypoint"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -33,6 +33,7 @@ dev = [
 
 [project.scripts]
 xiaoai-bridge = "xiaoai_bridge.app:main"
+xiaoai-init = "xiaoai_bridge.init_project:main"
 xiaoai-check-login = "xiaoai_bridge.check_login:main"
 xiaoai-select = "xiaoai_bridge.whichxiaoai:main"
 xiaoai-test-speak = "xiaoai_bridge.test_speak:main"

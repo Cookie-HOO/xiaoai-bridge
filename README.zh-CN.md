@@ -54,6 +54,7 @@ mkdir my-xiaoai-bot
 cd my-xiaoai-bot
 uv init
 uv add xiaoai-bridge
+xiaoai-init
 ```
 
 ### 使用 pip
@@ -69,31 +70,16 @@ pip install xiaoai-bridge
 
 ## 快速开始
 
-在你自己的项目中创建 `.env`：
+`xiaoai-init` 会在当前目录创建 `.env`、`handler.py` 和一个简单的 `.gitignore`。如果文件已存在，默认跳过；需要覆盖时使用 `--force`。
 
-```env
-MI_XIAOMI_ACCOUNT=""
-MI_XIAOMI_PASSWORD=""
-MI_XIAOMI_USER_ID=""
-MI_XIAOMI_PASS_TOKEN=""
-MI_SPEAKER_SN=""
-MI_SPEAKER_MAC=""
-MI_HANDLER="./handler.py:handler"
-MI_POLL_INTERVAL_SECONDS="1"
-MI_TOKEN_CACHE_PATH=".data/token_cache.json"
-MI_PUBLIC_BASE_URL=""
-MI_FILE_SERVER_HOST="0.0.0.0"
-MI_FILE_SERVER_PORT="8765"
-```
-
-推荐使用 `userId + passToken` 登录：
+在 `.env` 中填写小米登录信息：
 
 ```env
 MI_XIAOMI_USER_ID="你的小米 userId"
 MI_XIAOMI_PASS_TOKEN="你的 passToken，包含 V1: 前缀"
 ```
 
-在 `.env` 同级创建 `handler.py`：
+创建或编辑 `.env` 同级的 `handler.py`：
 
 ```python
 def handler(question: str, speaker):
@@ -283,6 +269,7 @@ MI_PUBLIC_BASE_URL="http://你的可访问地址:8765"
 
 | 命令 | 作用 |
 |---|---|
+| `xiaoai-init` | 在用户项目中创建 `.env`、`handler.py` 和 `.gitignore` |
 | `xiaoai-bridge` | 启动主程序，监听已选择的小爱音箱 |
 | `xiaoai-bridge --handler ./handler.py:handler` | 使用指定 handler 启动 |
 | `xiaoai-select` | 交互式选择要监听的小爱音箱，可多选 |

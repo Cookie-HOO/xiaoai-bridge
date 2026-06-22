@@ -54,6 +54,7 @@ mkdir my-xiaoai-bot
 cd my-xiaoai-bot
 uv init
 uv add xiaoai-bridge
+xiaoai-init
 ```
 
 ### With pip
@@ -69,31 +70,16 @@ pip install xiaoai-bridge
 
 ## Quickstart
 
-Create `.env` in your own project:
+`xiaoai-init` creates `.env`, `handler.py`, and a small `.gitignore` in the current directory. Existing files are skipped unless you pass `--force`.
 
-```env
-MI_XIAOMI_ACCOUNT=""
-MI_XIAOMI_PASSWORD=""
-MI_XIAOMI_USER_ID=""
-MI_XIAOMI_PASS_TOKEN=""
-MI_SPEAKER_SN=""
-MI_SPEAKER_MAC=""
-MI_HANDLER="./handler.py:handler"
-MI_POLL_INTERVAL_SECONDS="1"
-MI_TOKEN_CACHE_PATH=".data/token_cache.json"
-MI_PUBLIC_BASE_URL=""
-MI_FILE_SERVER_HOST="0.0.0.0"
-MI_FILE_SERVER_PORT="8765"
-```
-
-Recommended login method is `userId + passToken`:
+Fill these Xiaomi login values in `.env`:
 
 ```env
 MI_XIAOMI_USER_ID="your Xiaomi userId"
 MI_XIAOMI_PASS_TOKEN="your passToken, including the V1: prefix"
 ```
 
-Create `handler.py` next to `.env`:
+Create or edit `handler.py` next to `.env`:
 
 ```python
 def handler(question: str, speaker):
@@ -283,6 +269,7 @@ Or return an audio URL that is already reachable by the speaker.
 
 | Command | Purpose |
 |---|---|
+| `xiaoai-init` | Create `.env`, `handler.py`, and `.gitignore` in a user project |
 | `xiaoai-bridge` | Start the bridge and listen to selected speakers |
 | `xiaoai-bridge --handler ./handler.py:handler` | Start with a specific handler |
 | `xiaoai-select` | Interactively select one or more XiaoAi speakers |
