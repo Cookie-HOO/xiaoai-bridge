@@ -1,13 +1,34 @@
 [project]
 name = "xiaoai-bridge"
 version = "0.1.0"
-description = "Simple XiaoAi speaker control loop"
+description = "Use XiaoAi speakers as a programmable Python voice entrypoint"
 readme = "README.md"
 requires-python = ">=3.12"
+keywords = ["xiaoai", "xiaomi", "mina", "voice", "tts", "home-automation"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Home Automation",
+]
 dependencies = [
     "httpx>=0.28.1",
     "pydantic-settings>=2.10.1",
     "python-dotenv>=1.1.1",
+]
+
+[project.urls]
+Homepage = "https://github.com/Cookie-HOO/xiaoai-bridge"
+Repository = "https://github.com/Cookie-HOO/xiaoai-bridge"
+Issues = "https://github.com/Cookie-HOO/xiaoai-bridge/issues"
+Releases = "https://github.com/Cookie-HOO/xiaoai-bridge/releases"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4.1",
+    "pytest-asyncio>=1.1.0",
 ]
 
 [project.scripts]

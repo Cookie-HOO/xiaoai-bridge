@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     xiaomi_pass_token: str = Field(default="", alias="MI_XIAOMI_PASS_TOKEN")
     speaker_sn: str = Field(default="", alias="MI_SPEAKER_SN")
     speaker_mac: str = Field(default="", alias="MI_SPEAKER_MAC")
+    handler_spec: str = Field(default="xiaoai_bridge.handler:handler", alias="MI_HANDLER")
     poll_interval_seconds: float = Field(default=1.0, alias="MI_POLL_INTERVAL_SECONDS")
     token_cache_path: Path = Field(
         default=Path(".data/token_cache.json"),
@@ -68,7 +69,7 @@ class Settings(BaseSettings):
         return (
             f"account={account}, speaker_sn={len(self.speaker_sn_values()) or '<empty>'}, "
             f"speaker_mac={len(self.speaker_mac_values()) or '<empty>'}, "
-            f"poll_interval={self.poll_interval_seconds}s"
+            f"handler={self.handler_spec}, poll_interval={self.poll_interval_seconds}s"
         )
 
 

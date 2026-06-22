@@ -1,3 +1,9 @@
+"""Built-in sample handler.
+
+For package usage, create your own handler outside xiaoai_bridge and configure
+MI_HANDLER or pass xiaoai-bridge --handler. This module is only a fallback demo.
+"""
+
 from __future__ import annotations
 
 import asyncio

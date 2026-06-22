@@ -1,15 +1,16 @@
 from __future__ import annotations
 
+import argparse
 import asyncio
 import inspect
 import logging
-from collections.abc import AsyncIterable, Iterable
+from collections.abc import AsyncIterable, Iterable, Sequence
 from pathlib import Path
 from typing import Any
 
 from xiaoai_bridge.audio_server import AudioFileServer, is_http_url, maybe_audio_result
 from xiaoai_bridge.config import Settings
-from xiaoai_bridge.handler import handler
+from xiaoai_bridge.handler_loader import HandlerFunc, load_handler
 from xiaoai_bridge.mina_client import MiNAClient, MiNADevice
 from xiaoai_bridge.poller import ConversationPoller, ConversationRecord
 from xiaoai_bridge.xiaomi_auth import XiaomiAuthenticator
@@ -17,11 +18,26 @@ from xiaoai_bridge.xiaomi_auth import XiaomiAuthenticator
 LOGGER = logging.getLogger(__name__)
 
 
-def main() -> None:
-    asyncio.run(run())
+def main(argv: Sequence[str] | None = None) -> None:
+    args = parse_args(argv)
+    asyncio.run(run(handler_spec=args.handler))
 
 
-async def run() -> None:
+def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Listen to XiaoAi speakers and route questions to a Python handler.",
+    )
+    parser.add_argument(
+        "--handler",
+        help=(
+            "Handler spec to load. Supports module:callable, ./file.py:callable, "
+            "or ./file.py. Overrides MI_HANDLER."
+        ),
+    )
+    return parser.parse_args(argv)
+
+
+async def run(handler_spec: str | None = None) -> None:
     logging.basicConfig(
         level=logging.WARNING,
         format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
@@ -30,7 +46,10 @@ async def run() -> None:
     logging.getLogger("httpx").setLevel(logging.WARNING)
     settings = Settings()
     settings.validate_required_credentials()
+    effective_handler_spec = resolve_handler_spec(handler_spec, settings)
+    handler = load_handler(effective_handler_spec)
     LOGGER.info("Starting xiaoai-bridge with %s", settings.redacted_summary())
+    LOGGER.info("Loaded handler: %s", effective_handler_spec)
 
     authenticator = XiaomiAuthenticator(
         account=settings.xiaomi_account,
@@ -55,9 +74,13 @@ async def run() -> None:
             pollers = [ConversationPoller(mina, device) for device in devices]
             for poller in pollers:
                 await poller.initialize()
-            await poll_loop(settings, mina, pollers, audio_server)
+            await poll_loop(settings, mina, pollers, audio_server, handler)
     finally:
         await audio_server.stop()
+
+
+def resolve_handler_spec(cli_handler: str | None, settings: Settings) -> str:
+    return cli_handler or settings.handler_spec
 
 
 async def poll_loop(
@@ -65,6 +88,7 @@ async def poll_loop(
     mina: MiNAClient,
     pollers: list[ConversationPoller],
     audio_server: AudioFileServer,
+    handler: HandlerFunc,
 ) -> None:
     names = ", ".join(poller.device.display_name for poller in pollers)
     LOGGER.info(
@@ -77,7 +101,7 @@ async def poll_loop(
             for poller in pollers:
                 records = await poller.fetch_new_questions()
                 for record in records:
-                    await process_record(mina, poller.device, audio_server, record)
+                    await process_record(mina, poller.device, audio_server, record, handler)
         except KeyboardInterrupt:
             raise
         except Exception:
@@ -90,10 +114,11 @@ async def process_record(
     device: MiNADevice,
     audio_server: AudioFileServer,
     record: ConversationRecord,
+    handler: HandlerFunc,
 ) -> None:
     LOGGER.info("New question from %s: %s", device.display_name, record.question)
     try:
-        result = await call_handler(record.question, device)
+        result = await call_handler(handler, record.question, device)
     except Exception:
         LOGGER.exception("handler() failed for question: %s", record.question)
         return
@@ -168,7 +193,7 @@ def is_sync_iterable(value: Any) -> bool:
     return not isinstance(value, str | bytes | bytearray | Path) and isinstance(value, Iterable)
 
 
-async def call_handler(question: str, device: MiNADevice) -> Any:
+async def call_handler(handler: HandlerFunc, question: str, device: MiNADevice) -> Any:
     try:
         result = handler(question, device)
     except TypeError:

@@ -2,64 +2,74 @@
 
 # xiaoai-bridge
 
-**把小爱音箱变成可编程的大模型 / Python Handler 语音入口。**
+**Use XiaoAi speakers as a programmable Python voice entrypoint.**
 
 <p>
   <img alt="Python" src="https://img.shields.io/badge/Python-3.12+-3776AB">
-  <img alt="uv" src="https://img.shields.io/badge/uv-ready-2C5F2D">
+  <img alt="PyPI" src="https://img.shields.io/badge/PyPI-xiaoai--bridge-blue">
   <img alt="XiaoAi" src="https://img.shields.io/badge/XiaoAi-MiNA-FF6900">
   <img alt="Handler" src="https://img.shields.io/badge/Handler-sync%20%7C%20async%20%7C%20stream-blue">
 </p>
 
-[快速开始](#快速开始) · [选择音箱](#选择要监听的小爱音箱) · [编写 Handler](#编写-handler) · [命令参考](#命令参考) · [Token 过期处理](#token-过期处理)
+[简体中文](README.zh-CN.md) · [Quickstart](#quickstart) · [Write a Handler](#write-a-handler) · [Commands](#commands) · [Troubleshooting](#troubleshooting)
 
 </div>
 
 ---
 
-## 这个项目做什么
+## What it does
 
-`xiaoai-bridge` 会持续监听你选择的小爱音箱：
+`xiaoai-bridge` continuously listens to selected XiaoAi speakers, forwards new user questions to your Python handler, then plays the handler response through the same speaker.
 
 ```text
-你对小爱说话
+You talk to XiaoAi
   ↓
-xiaoai-bridge 轮询小爱对话记录
+xiaoai-bridge polls XiaoAi conversation records
   ↓
-调用 src/xiaoai_bridge/handler.py 里的 handler(question, speaker)
+Your handler(question, speaker) runs in your own project
   ↓
-根据 handler 返回结果，让对应小爱音箱播放文字或音频
+xiaoai-bridge plays text or audio through the matching speaker
 ```
 
-适合这些场景：
+Use it to:
 
-- 把小爱音箱接到自己的大模型。
-- 用 Python 快速实现家庭语音自动化。
-- 多台小爱音箱共用一套逻辑，并在 `handler` 里区分来源设备。
-- 让 handler 返回文字、远程 mp3 URL、本地 mp3 路径，或流式文本。
+- Connect XiaoAi speakers to your own LLM or automation logic.
+- Write home voice automations in plain Python.
+- Share one handler across multiple speakers while still knowing which speaker triggered the request.
+- Return text, remote audio URLs, local audio paths, or streaming text chunks.
 
 > [!NOTE]
-> 本项目参考 [`idootop/migpt-next`](https://github.com/idootop/migpt-next) 的 MiNA 调用方式实现。小米相关接口不是公开稳定 API，可能受账号安全策略、设备型号、固件版本和接口调整影响。
+> This project uses Xiaomi MiNA APIs inspired by [`idootop/migpt-next`](https://github.com/idootop/migpt-next). These APIs are not public stable APIs and may be affected by account security policy, device model, firmware version, region, or upstream changes.
 >
-> `xiaoai-bridge` 通过监听对话记录并向音箱追加 TTS / 音频播放来实现桥接，不一定能拦截或替换小爱音箱原本的回复。部分设备或场景下，可能会先听到小爱原生回复，再听到 handler 返回的内容。
+> `xiaoai-bridge` appends TTS/audio playback after observing conversation records. It may not intercept or replace XiaoAi's original response. On some devices or scenarios, users may hear XiaoAi's native response first, then the handler response.
 
-## 功能特性
+## Install
 
-- **多设备监听**：通过 `xiaoai-select` 可多选要监听的小爱音箱。
-- **来源可感知**：`handler(question, speaker)` 会拿到触发问题的具体小爱音箱。
-- **多种返回模式**：支持普通文本、异步文本、同步 generator、异步流式 generator、远程音频 URL、本地音频路径。
-- **本地音频桥接**：本地 mp3/audio 文件会临时映射成小爱可访问的 HTTP URL。
-- **登录态检查**：`xiaoai-check-login` 可快速判断 token 是否过期。
-- **测试播放**：`xiaoai-test-speak` 可指定让小爱播放的测试内容。
+### With uv
 
-## 快速开始
+Create your own bot project and install `xiaoai-bridge` as a dependency:
 
 ```bash
-uv sync
-cp .env.example .env
+mkdir my-xiaoai-bot
+cd my-xiaoai-bot
+uv init
+uv add xiaoai-bridge
 ```
 
-编辑 `.env`，至少填写小米登录凭据：
+### With pip
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install xiaoai-bridge
+```
+
+> [!TIP]
+> Keep your `handler.py`, `.env`, and any private automation code in your own project. Do not edit `site-packages/xiaoai_bridge/handler.py` or the package source.
+
+## Quickstart
+
+Create `.env` in your own project:
 
 ```env
 MI_XIAOMI_ACCOUNT=""
@@ -68,6 +78,7 @@ MI_XIAOMI_USER_ID=""
 MI_XIAOMI_PASS_TOKEN=""
 MI_SPEAKER_SN=""
 MI_SPEAKER_MAC=""
+MI_HANDLER="./handler.py:handler"
 MI_POLL_INTERVAL_SECONDS="1"
 MI_TOKEN_CACHE_PATH=".data/token_cache.json"
 MI_PUBLIC_BASE_URL=""
@@ -75,113 +86,142 @@ MI_FILE_SERVER_HOST="0.0.0.0"
 MI_FILE_SERVER_PORT="8765"
 ```
 
-推荐使用 passToken 登录：
+Recommended login method is `userId + passToken`:
 
 ```env
-MI_XIAOMI_USER_ID="你的小米 userId"
-MI_XIAOMI_PASS_TOKEN="你的 passToken，包含 V1: 前缀"
+MI_XIAOMI_USER_ID="your Xiaomi userId"
+MI_XIAOMI_PASS_TOKEN="your passToken, including the V1: prefix"
 ```
 
-然后检查登录态：
+Create `handler.py` next to `.env`:
+
+```python
+def handler(question: str, speaker):
+    print(f"Question: {question}, speaker: {speaker.display_name}", flush=True)
+    return f"{speaker.display_name} heard: {question}"
+```
+
+Check login:
 
 ```bash
-uv run xiaoai-check-login
+xiaoai-check-login
 ```
 
-选择要监听的小爱音箱：
+Select the XiaoAi speakers to listen to:
 
 ```bash
-uv run xiaoai-select
+xiaoai-select
 ```
 
-启动桥接服务：
+Start the bridge:
 
 ```bash
-uv run xiaoai-bridge
+xiaoai-bridge
 ```
 
-## 获取 passToken
+You can also override the handler from the command line:
 
-1. 浏览器打开 `https://account.xiaomi.com/` 并登录。
-2. 打开开发者工具。
-3. 找到 `Cookies` / `存储` 中的 `https://account.xiaomi.com`。
-4. 复制：
+```bash
+xiaoai-bridge --handler ./handler.py:handler
+xiaoai-bridge --handler my_bot.handlers:handler
+```
+
+Handler priority:
+
+```text
+CLI --handler > MI_HANDLER > built-in demo handler
+```
+
+## Get passToken
+
+1. Open `https://account.xiaomi.com/` in a browser and sign in.
+2. Open Developer Tools.
+3. Find Cookies / Storage for `https://account.xiaomi.com`.
+4. Copy:
    - `userId`
    - `passToken`
-5. 写入 `.env`：
+5. Write them to `.env`:
 
 ```env
 MI_XIAOMI_USER_ID="..."
 MI_XIAOMI_PASS_TOKEN="V1:..."
 ```
 
-如果 Chrome 看不到 `passToken`，可以尝试 Firefox。`passToken` 前面的 `V1:` 要一起复制。
+If Chrome does not show `passToken`, try Firefox. Copy the `V1:` prefix as part of `passToken`.
 
-## 选择要监听的小爱音箱
+## Select XiaoAi speakers
 
-运行交互式选择器：
+Run the interactive selector:
 
 ```bash
-uv run xiaoai-select
+xiaoai-select
 ```
 
-操作方式：
+Keys:
 
-| 按键 | 作用 |
+| Key | Action |
 |---|---|
-| `↑` / `↓` | 移动光标 |
-| `空格` | 选择 / 取消选择 |
-| `a` | 全选 / 全不选 |
-| `Enter` | 保存到 `.env` |
-| `q` | 取消 |
+| `↑` / `↓` | Move cursor |
+| `Space` | Select / deselect |
+| `a` | Select all / none |
+| `Enter` | Save to `.env` |
+| `q` | Cancel |
 
-保存后会更新：
+The selector updates:
 
 ```env
 MI_SPEAKER_SN="sn1,sn2,..."
 MI_SPEAKER_MAC="mac1,mac2,..."
 ```
 
-## 编写 Handler
+## Write a Handler
 
-编辑：
-
-```text
-src/xiaoai_bridge/handler.py
-```
-
-### 普通文本回复
+Create a handler in your own project, for example `handler.py`:
 
 ```python
 from xiaoai_bridge.mina_client import MiNADevice
 
 
 def handler(question: str, speaker: MiNADevice) -> str | None:
-    print(f"用户问题：{question}，来自：{speaker.display_name}", flush=True)
-    return f"{speaker.display_name}，你刚才问的是：{question}"
+    print(f"Question: {question}, speaker: {speaker.display_name}", flush=True)
+    return f"{speaker.display_name}, you asked: {question}"
 ```
 
-### 根据来源音箱区分逻辑
+Configure it with one of these forms:
+
+```env
+MI_HANDLER="./handler.py:handler"
+MI_HANDLER="/absolute/path/to/handler.py:handler"
+MI_HANDLER="my_bot.handlers:handler"
+```
+
+If the callable name is omitted, `handler` is used by default:
+
+```env
+MI_HANDLER="./handler.py"
+```
+
+`speaker` commonly contains:
+
+| Field | Meaning |
+|---|---|
+| `speaker.display_name` | Speaker name, preferring alias/name |
+| `speaker.serial_number` | SN |
+| `speaker.mac` | MAC address |
+| `speaker.hardware` | Hardware model, for example `LX06` |
+| `speaker.device_id` | MiNA device id |
+| `speaker.miot_did` | Mi Home did |
+
+### Branch by speaker
 
 ```python
 def handler(question: str, speaker) -> str | None:
-    if speaker.display_name == "客厅小爱":
-        return "这是客厅小爱的回复。"
-    return f"{speaker.display_name} 收到。"
+    if speaker.display_name == "Living Room XiaoAi":
+        return "This reply is from the living room speaker."
+    return f"{speaker.display_name} received it."
 ```
 
-`speaker` 常用字段：
-
-| 字段 | 含义 |
-|---|---|
-| `speaker.display_name` | 音箱名称，优先 alias/name |
-| `speaker.serial_number` | SN |
-| `speaker.mac` | MAC 地址 |
-| `speaker.hardware` | 硬件型号，例如 `LX06` |
-| `speaker.device_id` | MiNA device id |
-| `speaker.miot_did` | 米家 did |
-
-### async handler
+### Async handler
 
 ```python
 async def handler(question: str, speaker) -> str | None:
@@ -189,7 +229,7 @@ async def handler(question: str, speaker) -> str | None:
     return answer
 ```
 
-### 流式 handler
+### Streaming handler
 
 ```python
 import asyncio
@@ -201,165 +241,175 @@ async def handler(question: str, speaker):
 
 
 async def ask_your_llm_stream(question: str):
-    for chunk in ["第一段回复。", "第二段回复。", "第三段回复。"]:
+    for chunk in ["First sentence.", "Second sentence.", "Third sentence."]:
         await asyncio.sleep(0.5)
         yield chunk
 ```
 
-流式模式下，每 `yield` 一段非空文字，程序会立即调用一次小爱 TTS 播放。
+Each non-empty yielded chunk triggers one XiaoAi TTS playback.
 
 > [!TIP]
-> 建议按句子或短段落 `yield`，不要按 token / 单字 `yield`。小爱 TTS 不是 WebSocket 音频流，过小的 chunk 会导致频繁播放短片段，体验不好。
+> Yield sentences or short paragraphs, not tokens or single characters. XiaoAi TTS is not a WebSocket audio stream; tiny chunks cause frequent short playback segments.
 
-### 返回远程 mp3 URL
+### Return a remote audio URL
 
 ```python
 def handler(question: str, speaker) -> str | None:
     return "https://example.com/reply.mp3"
 ```
 
-### 返回本地 mp3 路径
+### Return a local audio path
 
 ```python
 def handler(question: str, speaker) -> str | None:
     return "/Users/example/Music/reply.mp3"
 ```
 
-小爱音箱不能直接读取你电脑上的本地文件。程序会启动一个轻量 HTTP 服务，把本地文件映射为：
+XiaoAi speakers cannot read files directly from your computer. `xiaoai-bridge` starts a lightweight HTTP server and maps the file to:
 
 ```text
-http://<你的局域网IP>:8765/audio/<token>.mp3
+http://<your-lan-ip>:8765/audio/<token>.mp3
 ```
 
-如果小爱音箱访问不到该地址，请设置：
+If the speaker cannot access that address, set:
 
 ```env
-MI_PUBLIC_BASE_URL="http://你的可访问地址:8765"
+MI_PUBLIC_BASE_URL="http://your-reachable-host:8765"
 ```
 
-或直接返回公网 / 局域网可访问的音频 URL。
+Or return an audio URL that is already reachable by the speaker.
 
-## 命令参考
+## Commands
 
-| 命令 | 作用 |
+| Command | Purpose |
 |---|---|
-| `uv run xiaoai-bridge` | 启动主程序，监听已选择的小爱音箱 |
-| `uv run xiaoai-select` | 交互式选择要监听的小爱音箱，可多选 |
-| `uv run xiaoai-check-login` | 检查小米登录态、设备列表和当前监听设备 |
-| `uv run xiaoai-test-speak` | 播放默认测试语音 |
-| `uv run xiaoai-test-speak "你好"` | 播放自定义测试语音 |
-| `uv run ruff check .` | 代码检查 |
+| `xiaoai-bridge` | Start the bridge and listen to selected speakers |
+| `xiaoai-bridge --handler ./handler.py:handler` | Start with a specific handler |
+| `xiaoai-select` | Interactively select one or more XiaoAi speakers |
+| `xiaoai-check-login` | Check Xiaomi login, device list, and selected speakers |
+| `xiaoai-test-speak` | Play default test TTS |
+| `xiaoai-test-speak "hello"` | Play custom test TTS |
 
-## Token 过期处理
+### Source checkout commands
 
-正常情况下，如果缓存的 `serviceToken` 过期，程序会尝试用 `.env` 里的 `passToken` 自动刷新。
-
-如果 `passToken` 也失效，你可能会看到：
-
-- 小爱不再回复你设定的内容。
-- 控制台出现 `401`、`XiaomiAuthError`、`login failed` 等错误。
-- `xiaoai-check-login` 检查失败。
-
-快速恢复流程：
+If you are developing this repository itself, use `uv run`:
 
 ```bash
-# 1. 重新从浏览器 Cookie 获取 userId / passToken，并更新 .env
+uv sync --dev
+uv run xiaoai-bridge --handler ./handler.py:handler
+uv run ruff check .
+uv run pytest
+```
 
-# 2. 删除旧 serviceToken 缓存
+## Token expiration
+
+Normally, if cached `serviceToken` expires, the program tries to refresh it with `passToken` from `.env`.
+
+If `passToken` is also invalid, you may see:
+
+- XiaoAi no longer plays your configured response.
+- Console errors such as `401`, `XiaomiAuthError`, or `login failed`.
+- `xiaoai-check-login` fails.
+
+Recovery:
+
+```bash
+# 1. Get a fresh userId / passToken from browser cookies and update .env
+
+# 2. Delete old serviceToken cache
 rm -f .data/token_cache.json
 
-# 3. 检查登录态
-uv run xiaoai-check-login
+# 3. Check login
+xiaoai-check-login
 
-# 4. 检查通过后重启主程序
-uv run xiaoai-bridge
+# 4. Restart the bridge
+xiaoai-bridge
 ```
 
-## 测试播放
+## Runtime behavior
 
-播放默认测试语音：
+On startup, the program:
+
+1. Reads `.env`.
+2. Loads the configured handler from `MI_HANDLER` or `--handler`.
+3. Uses Xiaomi login state to obtain a MiNA `serviceToken`.
+4. Lists devices and matches selected speakers.
+5. Initializes conversation cursors without replaying old records.
+6. Polls new conversations every `MI_POLL_INTERVAL_SECONDS`.
+7. Calls `handler(question, speaker)` for each new question.
+8. Plays TTS or audio based on the handler result.
+
+## Troubleshooting
+
+### No sound
+
+Check login first:
 
 ```bash
-uv run xiaoai-test-speak
+xiaoai-check-login
 ```
 
-播放自定义内容：
+Then test TTS:
 
 ```bash
-uv run xiaoai-test-speak "你好，这是自定义测试内容"
+xiaoai-test-speak "test sound"
 ```
 
-默认只会向当前选择的第一台小爱音箱发送测试 TTS。
+If the command succeeds but there is no sound, check:
 
-## 运行时行为
+- The selected speaker is the one you are testing.
+- The speaker is online and not in an abnormal playback state.
+- The speaker volume is not zero.
 
-启动后程序会：
+### Handler cannot be loaded
 
-1. 读取 `.env`。
-2. 使用小米登录态获取 MiNA `serviceToken`。
-3. 拉取设备列表并匹配 `.env` 中选择的小爱音箱。
-4. 为每台音箱初始化对话游标，不回放历史问题。
-5. 按 `MI_POLL_INTERVAL_SECONDS` 轮询新对话。
-6. 发现新问题后调用 `handler(question, speaker)`。
-7. 根据 handler 返回值播放 TTS 或音频。
+Check `MI_HANDLER`:
 
-## 故障排查
+```env
+MI_HANDLER="./handler.py:handler"
+```
 
-### 没有声音
+Make sure:
 
-先检查登录态：
+- the file exists relative to the directory where you run `xiaoai-bridge`;
+- the callable exists and is named `handler` or explicitly named after `:`;
+- for `module:callable`, the module is importable in the current environment.
+
+### No user questions printed
+
+Confirm:
+
+1. `xiaoai-select` selected the correct device.
+2. You asked the selected speaker a question that produces a normal answer, not only the wake word.
+3. The bridge is running:
 
 ```bash
-uv run xiaoai-check-login
+xiaoai-bridge
 ```
 
-再测试 TTS：
+### Login failed
 
-```bash
-uv run xiaoai-test-speak "测试声音"
-```
+Prefer passToken login. Frequent automatic account/password login may trigger Xiaomi risk control.
 
-如果命令成功但没声音，确认：
-
-- 选择的是正在测试的那台音箱。
-- 音箱在线且没有处于异常播放状态。
-- 音箱音量不为 0。
-
-### 没有打印用户问题
-
-确认：
-
-1. `uv run xiaoai-select` 选择了正确设备。
-2. 你对选中的音箱说了会产生正常回答的问题，而不是只说唤醒词。
-3. 主程序正在运行：
-
-```bash
-uv run xiaoai-bridge
-```
-
-### 登录失败
-
-优先使用 passToken，不建议频繁用账号密码自动登录，因为容易触发小米风控。
-
-如果失败：
+If login fails:
 
 ```bash
 rm -f .data/token_cache.json
-uv run xiaoai-check-login
+xiaoai-check-login
 ```
 
-仍失败则重新获取 `MI_XIAOMI_USER_ID` 和 `MI_XIAOMI_PASS_TOKEN`。
+If it still fails, refresh `MI_XIAOMI_USER_ID` and `MI_XIAOMI_PASS_TOKEN`.
 
-## 当前边界
+## Current boundaries
 
-- 只实现 MiNA 相关能力，不实现完整 MIoT RC4 协议。
-- 只处理启动后的新问题，不回放历史记录。
-- 流式文本是“分段多次 TTS”，不是真正的音频流。
-- 本地音频播放依赖网络可达性；如果音箱访问不到程序生成的 URL，需要配置 `MI_PUBLIC_BASE_URL` 或返回远程 URL。
-- 小米接口可能随时间、地区、账号安全策略或设备固件变化。
+- Only MiNA-related capabilities are implemented; full MIoT RC4 protocol support is not included.
+- Only new questions after startup are processed; old records are not replayed.
+- Streaming text is segmented TTS playback, not true audio streaming.
+- Local audio playback depends on network reachability. If the speaker cannot access the generated URL, set `MI_PUBLIC_BASE_URL` or return a remote URL.
+- Xiaomi APIs may change with time, region, account security policy, or device firmware.
 
-## 安全与隐私
+## Security and privacy
 
-- 不要把 `.env`、`.data/token_cache.json`、`passToken`、`serviceToken` 提交到公开仓库。
-- `passToken` 等同于登录凭据，过期或泄露后应重新登录刷新。
-- README 示例中的路径和地址都使用占位值，不包含真实设备凭据。
+- Do not commit `.env`, `.data/token_cache.json`, `passToken`, or `serviceToken` to a public repository.
+- `passToken` is a login credential. Refresh it if it expires or leaks.
+- Keep `handler.py` private if it contains personal automation logic, keys, or local service URLs.
