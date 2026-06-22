@@ -1,6 +1,6 @@
 [project]
 name = "xiaoai-bridge"
-version = "0.1.0"
+version = "0.2.0"
 description = "Use XiaoAi speakers as a programmable Python voice entrypoint"
 readme = "README.md"
 requires-python = ">=3.12"
